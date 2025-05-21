@@ -1,5 +1,7 @@
 package com.example.completablefuture;
 
+import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -9,12 +11,9 @@ import static org.junit.Assert.fail;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class CompletableFutureExamples {
@@ -263,6 +262,52 @@ public class CompletableFutureExamples {
             Thread.sleep(2000);
         } catch (InterruptedException e) {
             // ...
+        }
+    }
+
+    @Test
+    public void testWhenComplete() throws InterruptedException, ExecutionException {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+        CompletableFuture<String> future = new CompletableFuture<>(); // creating an incomplete future
+
+        executorService.submit(new AsyncSupply<>(future, () -> {
+            try {
+                TimeUnit.SECONDS.sleep(1);
+            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName());
+            return "sleep 1 second";
+        }));
+
+        future.whenComplete(new BiConsumer<String, Throwable>() {
+            @Override
+            public void accept(String s, Throwable throwable) {
+                System.out.println("result: " + s + ", Thread=" + Thread.currentThread().getName());
+            }
+        });
+
+        Thread.sleep(10000);
+    }
+
+    static class AsyncSupply<U> implements Runnable {
+
+        private final CompletableFuture<U> dep;
+        private final Supplier<U> fn;
+
+        AsyncSupply(CompletableFuture<U> dep, Supplier<U> fn) {
+            this.dep = dep;
+            this.fn = fn;
+        }
+
+        @Override
+        public void run() {
+            try {
+                dep.complete(fn.get());
+            }catch (Exception e){
+                dep.completeExceptionally(e);
+            }
         }
     }
 
